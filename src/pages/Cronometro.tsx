@@ -1,32 +1,43 @@
 import { useCulto } from '@/contexts/CultoContext';
 import { useCronometro } from '@/contexts/CronometroContext';
-import { useRef, useCallback, useEffect, memo } from 'react';
-import { motion } from 'framer-motion';
+import { useRef, useCallback, memo } from 'react';
+
+const blend = (base: string, overlay: string, alpha: number) => {
+  const toRgb = (hex: string) => {
+    const value = hex.replace('#', '');
+    return {
+      r: parseInt(value.slice(0, 2), 16),
+      g: parseInt(value.slice(2, 4), 16),
+      b: parseInt(value.slice(4, 6), 16),
+    };
+  };
+
+  const a = toRgb(base);
+  const b = toRgb(overlay);
+  return `rgb(${Math.round(a.r + (b.r - a.r) * alpha)}, ${Math.round(a.g + (b.g - a.g) * alpha)}, ${Math.round(a.b + (b.b - a.b) * alpha)})`;
+};
 
 const Cronometro = memo(() => {
   const { momentos, currentIndex, momentElapsedSeconds, culto } = useCulto();
-  const { isBlinking, message, showMessage, orangeThreshold, redThreshold } = useCronometro();
+  const {
+    isBlinking,
+    message,
+    showMessage,
+    orangeThreshold,
+    redThreshold,
+    topFontSize,
+    bottomFontSize,
+    timerFontSize,
+    messageFontSize,
+    backgroundColor,
+    timerTextColor,
+    topTextColor,
+    bottomTextColor,
+    messageTextColor,
+    warningColor,
+    dangerColor,
+  } = useCronometro();
   const containerRef = useRef<HTMLDivElement>(null);
-
-  const currentMoment = currentIndex >= 0 ? momentos[currentIndex] : null;
-  const baseDurationSec = currentMoment ? currentMoment.duracao * 60 : 0;
-  const remainingSeconds = Math.max(0, baseDurationSec - momentElapsedSeconds);
-
-  const minutes = Math.floor(remainingSeconds / 60);
-  const seconds = remainingSeconds % 60;
-
-  const minStr = String(minutes).padStart(2, '0');
-  const secStr = String(seconds).padStart(2, '0');
-
-  const isRed = remainingSeconds <= redThreshold && !!currentMoment;
-  const isOrange = !isRed && remainingSeconds <= orangeThreshold && !!currentMoment;
-
-  // Use CSS custom properties to avoid re-renders for color changes
-  const timerColor = isRed ? '#ef4444' : isOrange ? '#f59e0b' : '#ffffff';
-
-  // Progress as CSS transform for GPU-accelerated animation
-  const progressPercent = baseDurationSec > 0 ? (baseDurationSec - remainingSeconds) / baseDurationSec * 100 : 0;
-
   const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
       containerRef.current?.requestFullscreen();
@@ -35,31 +46,36 @@ const Cronometro = memo(() => {
     }
   }, []);
 
+  if (!culto || typeof culto.status !== 'string') {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-black">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-white/60">Carregando cronometro...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const safeElapsedSeconds = typeof momentElapsedSeconds === 'number' ? momentElapsedSeconds : 0;
+  const safeCurrentIndex = typeof currentIndex === 'number' ? currentIndex : -1;
+  const safeMomentos = Array.isArray(momentos) ? momentos : [];
+  const currentMoment = safeCurrentIndex >= 0 ? safeMomentos[safeCurrentIndex] : null;
+  const baseDurationSec = currentMoment ? currentMoment.duracao * 60 : 0;
+  const remainingSeconds = Math.max(0, baseDurationSec - safeElapsedSeconds);
+  const progressPercent = baseDurationSec > 0 ? ((baseDurationSec - remainingSeconds) / baseDurationSec) * 100 : 0;
+  const isRed = remainingSeconds <= redThreshold && !!currentMoment;
+  const isOrange = !isRed && remainingSeconds <= orangeThreshold && !!currentMoment;
+  const accentColor = isRed ? dangerColor : isOrange ? warningColor : timerTextColor;
+  const effectiveBackground = isRed ? blend(backgroundColor, dangerColor, 0.22) : isOrange ? blend(backgroundColor, warningColor, 0.16) : backgroundColor;
   const isNotStarted = culto.status === 'planejado';
   const isFinished = culto.status === 'finalizado';
 
-  // Progress bar color
-  const orangeEnd = baseDurationSec > 0 ? 100 - redThreshold / baseDurationSec * 100 : 100;
-  const greenEnd = baseDurationSec > 0 ? 100 - orangeThreshold / baseDurationSec * 100 : 100;
-
-  const progressColor = progressPercent > orangeEnd
-    ? '#ef4444'
-    : progressPercent > greenEnd
-    ? '#f59e0b'
-    : '#22c55e';
-
-  const progressGlow = progressPercent > orangeEnd
-    ? '0 0 30px rgba(239,68,68,0.5)'
-    : progressPercent > greenEnd
-    ? '0 0 30px rgba(245,158,11,0.4)'
-    : '0 0 30px rgba(34,197,94,0.4)';
-
-  // Background
-  const bgStyle = isRed
-    ? { background: 'linear-gradient(180deg, #1a0505 0%, #2d0a0a 50%, #1a0505 100%)' }
-    : isOrange
-    ? { background: 'linear-gradient(180deg, #1a1305 0%, #2d2008 50%, #1a1305 100%)' }
-    : { background: '#000000' };
+  const formatTimer = (seconds: number) => {
+    const min = Math.floor(seconds / 60);
+    const sec = seconds % 60;
+    return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+  };
 
   return (
     <div
@@ -67,112 +83,88 @@ const Cronometro = memo(() => {
       className="h-screen w-screen flex flex-col items-center justify-center select-none cursor-pointer relative overflow-hidden"
       onClick={toggleFullscreen}
       style={{
-        ...bgStyle,
-        transition: 'background 1s ease',
-        willChange: 'background',
+        background: effectiveBackground,
+        transition: 'background 0.5s ease',
       }}
     >
-      {/* Ambient glow - GPU accelerated */}
       {(isRed || isOrange) && (
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
             background: isRed
-              ? 'radial-gradient(ellipse at center, rgba(239,68,68,0.12) 0%, transparent 60%)'
-              : 'radial-gradient(ellipse at center, rgba(245,158,11,0.08) 0%, transparent 60%)',
-            opacity: 1,
-            animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-            willChange: 'opacity',
+              ? `radial-gradient(ellipse at center, ${dangerColor}33 0%, transparent 60%)`
+              : `radial-gradient(ellipse at center, ${warningColor}22 0%, transparent 60%)`,
           }}
         />
       )}
 
-      {/* Main content */}
-      <div className="flex-1 flex flex-col items-center justify-center relative z-10 w-full">
-        {/* Activity name */}
+      <div className="flex-1 flex flex-col items-center justify-center relative z-10 w-full px-4 text-center">
         {currentMoment && !showMessage && (
           <p
-            className="tracking-[0.2em] uppercase text-center mb-2 px-4 font-extrabold font-sans"
+            className="uppercase mb-3"
             style={{
-              color: 'rgba(255,255,255,0.7)',
-              fontFamily: "'Inter', 'Roboto', sans-serif",
-              fontSize: 'clamp(2rem, 5vw, 4rem)',
+              color: isRed || isOrange ? '#f8fafc' : topTextColor,
+              fontSize: `clamp(1.5rem, 5vw, ${topFontSize}rem)`,
+              letterSpacing: '0.12em',
             }}
           >
             {currentMoment.atividade}
           </p>
         )}
 
-        {/* Message overlay */}
         {showMessage && message ? (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="font-extrabold text-center px-8"
+          <p
+            className={`font-display font-bold break-words max-w-[92vw] ${isBlinking ? 'cronometro-blink' : ''}`}
             style={{
-              color: '#ffffff',
-              fontFamily: "'Inter', sans-serif",
-              fontSize: 'clamp(5rem, 16vw, 20rem)',
-              letterSpacing: '-0.02em',
+              color: isRed || isOrange ? '#ffffff' : messageTextColor,
+              fontSize: `clamp(2rem, 12vw, ${messageFontSize}rem)`,
             }}
           >
             {message}
-          </motion.div>
+          </p>
         ) : (
-          <>
-            {/* Timer - use will-change for smooth updates */}
-            {(currentMoment || isNotStarted || isFinished) && !showMessage && (
-              <div
-                className={`flex items-center justify-center font-mono font-extrabold ${isBlinking ? 'animate-pulse' : ''}`}
-                style={{
-                  color: timerColor,
-                  fontSize: 'clamp(10rem, 35vw, 55rem)',
-                  letterSpacing: '-0.04em',
-                  lineHeight: 1,
-                  transition: 'color 0.5s ease',
-                  willChange: 'contents',
-                }}
-              >
-                {isNotStarted || isFinished ? (
-                  <>
-                    <span>00</span>
-                    <span style={{ opacity: 0.4, width: '0.25em', fontSize: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>:</span>
-                    <span>00</span>
-                  </>
-                ) : (
-                  <>
-                    <span>{minStr[0]}</span>
-                    <span>{minStr[1]}</span>
-                    <span style={{ opacity: 0.4, width: '0.25em', fontSize: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>:</span>
-                    <span>{secStr[0]}</span>
-                    <span>{secStr[1]}</span>
-                  </>
-                )}
-              </div>
-            )}
-          </>
+          <div
+            className={`font-mono font-extrabold leading-none ${isBlinking ? 'cronometro-blink' : ''}`}
+            style={{
+              color: accentColor,
+              fontSize: `clamp(7rem, 30vw, ${timerFontSize}rem)`,
+              textShadow: `0 0 40px ${accentColor}55`,
+            }}
+          >
+            {isNotStarted || isFinished ? '00:00' : formatTimer(remainingSeconds)}
+          </div>
+        )}
+
+        {currentMoment && !showMessage && (
+          <p
+            className="mt-4 max-w-[80vw]"
+            style={{
+              color: isRed || isOrange ? '#e2e8f0' : bottomTextColor,
+              fontSize: `clamp(1.2rem, 4vw, ${bottomFontSize}rem)`,
+            }}
+          >
+            {currentMoment.responsavel}
+          </p>
         )}
       </div>
 
-      {/* Progress bar - GPU-accelerated with transform */}
-      <div className="w-[90%] relative z-10 mb-[3vh]">
+      <div className="w-[90%] relative z-10 mb-[4vh]">
         <div
-          className="w-full rounded-xl overflow-hidden"
+          className="w-full rounded-2xl overflow-hidden"
           style={{
-            height: 'clamp(40px, 6vh, 80px)',
-            background: 'rgba(255,255,255,0.08)',
+            height: 'clamp(28px, 4.5vh, 54px)',
+            background: 'rgba(255,255,255,0.12)',
+            border: '1px solid rgba(255,255,255,0.18)',
           }}
         >
           <div
-            className="h-full rounded-xl"
+            className="h-full rounded-2xl"
             style={{
               width: '100%',
-              transform: `scaleX(${progressPercent / 100})`,
+              transform: `scaleX(${(isNotStarted || isFinished) ? 0 : Math.max(0, Math.min(1, progressPercent / 100))})`,
               transformOrigin: 'left',
-              transition: 'transform 1s linear, background 0.5s ease',
-              background: progressColor,
-              boxShadow: progressGlow,
-              willChange: 'transform',
+              background: `linear-gradient(90deg, ${blend(accentColor, '#ffffff', 0.15)} 0%, ${accentColor} 100%)`,
+              boxShadow: `0 0 30px ${accentColor}66`,
             }}
           />
         </div>

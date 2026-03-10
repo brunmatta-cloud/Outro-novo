@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { CultoProvider } from "@/contexts/CultoContext";
 import { CronometroProvider } from "@/contexts/CronometroContext";
+import AppErrorBoundary from "@/components/app/AppErrorBoundary";
 import AppLayout from "@/components/layout/AppLayout";
 import React, { Suspense } from "react";
 
@@ -38,6 +39,12 @@ const PageLoader = () => (
   </div>
 );
 
+const withPageGuard = (element: React.ReactNode, description?: string) => (
+  <AppErrorBoundary description={description}>
+    {element}
+  </AppErrorBoundary>
+);
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -49,20 +56,20 @@ const App = () => (
             <AppLayout>
               <Suspense fallback={<PageLoader />}>
                 <Routes>
-                  <Route path="/" element={<Dashboard />} />
-                  <Route path="/cerimonialista" element={<PainelCerimonialista />} />
-                  <Route path="/sonoplastia" element={<PainelSonoplastia />} />
-                  <Route path="/chamada" element={<PainelChamada />} />
-                  <Route path="/programacao" element={<Programacao />} />
-                  <Route path="/editor" element={<Programacao />} />
-                  <Route path="/linha-do-tempo" element={<LinhaDoTempo />} />
-                  <Route path="/artes" element={<GeradorArtes />} />
-                  <Route path="/foco" element={<ModoFoco />} />
-                  <Route path="/configuracoes" element={<Configuracoes />} />
-                  <Route path="/estatisticas" element={<Estatisticas />} />
-                  <Route path="/cronometro" element={<Cronometro />} />
-                  <Route path="/cronometro-controle" element={<CronometroControle />} />
-                  <Route path="*" element={<NotFound />} />
+                  <Route path="/" element={withPageGuard(<Dashboard />)} />
+                  <Route path="/cerimonialista" element={withPageGuard(<PainelCerimonialista />, "O painel do cerimonialista encontrou um erro, mas a navegacao foi preservada.")} />
+                  <Route path="/sonoplastia" element={withPageGuard(<PainelSonoplastia />)} />
+                  <Route path="/chamada" element={withPageGuard(<PainelChamada />)} />
+                  <Route path="/programacao" element={withPageGuard(<Programacao />)} />
+                  <Route path="/editor" element={withPageGuard(<Programacao />)} />
+                  <Route path="/linha-do-tempo" element={withPageGuard(<LinhaDoTempo />)} />
+                  <Route path="/artes" element={withPageGuard(<GeradorArtes />)} />
+                  <Route path="/foco" element={withPageGuard(<ModoFoco />)} />
+                  <Route path="/configuracoes" element={withPageGuard(<Configuracoes />)} />
+                  <Route path="/estatisticas" element={withPageGuard(<Estatisticas />)} />
+                  <Route path="/cronometro" element={withPageGuard(<Cronometro />, "O cronometro falhou ao renderizar. A tela foi contida para evitar pagina preta.")} />
+                  <Route path="/cronometro-controle" element={withPageGuard(<CronometroControle />, "O controle do cronometro falhou ao renderizar. A aplicacao foi mantida ativa.")} />
+                  <Route path="*" element={withPageGuard(<NotFound />)} />
                 </Routes>
               </Suspense>
             </AppLayout>

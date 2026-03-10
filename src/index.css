@@ -128,4 +128,20 @@
   .text-display {
     font-family: var(--font-display);
   }
+
+  .cronometro-blink {
+    animation: cronometro-blink 0.7s steps(2, end) infinite;
+  }
+}
+
+@keyframes cronometro-blink {
+  0%, 100% {
+    opacity: 1;
+    filter: brightness(1);
+  }
+
+  50% {
+    opacity: 0.12;
+    filter: brightness(1.35);
+  }
 }
